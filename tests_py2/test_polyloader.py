@@ -11,6 +11,7 @@ Tests for `polyloader` module.
 import polyloader
 import copy
 import sys
+import pytest
 
 # Note that these compilers don't actually load much out of the
 # source files.  That's not the point.  The point is to show that the
@@ -28,6 +29,8 @@ class ImportEnvironment(object):
         self.meta_path = copy.copy(sys.meta_path)
         self.modules = copy.copy(sys.modules)
         self.path_importer_cache = copy.copy(sys.path_importer_cache)
+        self.dont_write_bytecode = sys.dont_write_bytecode
+        sys.dont_write_bytecode = True
         return sys
 
     def __exit__(self, type, value, traceback):
@@ -36,6 +39,7 @@ class ImportEnvironment(object):
         sys.meta_path = self.meta_path
         sys.modules = self.modules
         sys.path_importer_cache = self.path_importer_cache
+        sys.dont_write_bytecode = self.dont_write_bytecode
 
 
 class Compiler:
@@ -98,6 +102,52 @@ class Test_Polymorph_Module(object):
             assert(result1 == "Success for 1: Test One")
             assert(result2 == "Success for 2: Test Two")
             assert(result3 == "Success for 3: Test Three")
+
+class Test_Polymorph_Reset(object):
+    def test_reset_after_import(self):
+        with ImportEnvironment() as sys:
+            polyloader.install(compiler("2"), ['2'])
+            polyloader.install(compiler("3"), ['3'])
+            from tests_py2.polytestmix.test3 import result as result3
+            polyloader.reset()
+            with pytest.raises(ImportError):
+                from tests_py2.polytestmix.test2 import result as result2
+    def test_reset_before_import(self):
+        with ImportEnvironment() as sys:
+            polyloader.install(compiler("3"), ['3'])
+            polyloader.reset()
+            with pytest.raises(ImportError):
+                from tests_py2.polytestmix.test3 import result as result3
+
+class Test_Polymorph_Uninstall(object):
+    def test_uninstall_after_import(self):
+        with ImportEnvironment() as sys:
+            polyloader.install(compiler("2"), ['2'])
+            polyloader.install(compiler("3"), ['3'])
+            import tests_py2.polytestmix.test3
+            assert(polyloader.is_installed('2'))
+            assert(polyloader.is_installed('3'))
+            polyloader.uninstall('2')
+            assert(not polyloader.is_installed('2'))
+            assert(polyloader.is_installed('3'))
+            with pytest.raises(ImportError):
+                import tests_py2.polytestmix.test2
+            import tests_py2.polytestmix.test1
+    def test_uninstall_before_import(self):
+        with ImportEnvironment() as sys:
+            polyloader.install(compiler("2"), ['2'])
+            polyloader.install(compiler("3"), ['3'])
+            assert(polyloader.is_installed('2'))
+            assert(polyloader.is_installed('3'))
+            polyloader.uninstall('2')
+            polyloader.uninstall('3')
+            assert(not polyloader.is_installed('2'))
+            assert(not polyloader.is_installed('3'))
+            with pytest.raises(ImportError):
+                import tests_py2.polytestmix.test2
+            with pytest.raises(ImportError):
+                import tests_py2.polytestmix.test3
+            import tests_py2.polytestmix.test1
 
 class Test_Polymorph_Iterator(object):
     ''' The Django Compatibility test: Can we load arbitrary modules from a package? '''

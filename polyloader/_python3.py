@@ -153,6 +153,25 @@ class PolyFileFinder(FileFinder):
         cls._custom_loaders += [(EXS + suffix, newloader) for suffix in suffixset]
 
     @classmethod
+    def _uninstall(cls, suffixes):
+        if not suffixes:
+            return
+        if isinstance(suffixes, str):
+            suffixes = [suffixes]
+        suffixset = set(suffixes)
+        overlap = suffixset.intersection(set([suf[0] for suf in cls._native_loaders]))
+        if overlap:
+            raise RuntimeError("Removing a native Python extensions is not permitted.")
+
+        exs_suffixset = set( EXS + suffix for suffix in suffixset )
+        cls._custom_loaders = [ (suffix, loader) for suffix, loader in cls._custom_loaders if suffix not in exs_suffixset ]
+
+    @classmethod
+    def _is_installed(cls, suffix):
+        suffix = EXS + suffix
+        return any( suf == suffix for suf, loader in cls._custom_loaders )
+
+    @classmethod
     def getmodulename(cls, path):
         filename = os.path.basename(path)
         suffixes = ([(-len(suf[0]), suf[0]) for suf in cls._native_loaders] +
@@ -268,6 +287,11 @@ def install(compiler, suffixes):
 
     PolyFileFinder._install(compiler, suffixes)
 
+def uninstall(suffixes):
+    PolyFileFinder._uninstall(suffixes)
+
+def is_installed(suffix):
+    return PolyFileFinder._is_installed(suffix)
 
 def reset():
     PolyFileFinder._custom_loaders = []
